@@ -10,34 +10,34 @@ import collections
 import argparse
 import requests
 from requests.models import PreparedRequest
-from imgurpython import ImgurClient
 import json
 from requests import get
 from os.path import expanduser
 from logger import log
 import string
+from imgurpython import ImgurClient
+import pdb
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_DIR = os.path.join(BASE_DIR, "brains")
 MAIN_DB = os.path.join(BASE_DIR, "brains/brain.db")
 MAIN_DB_MIN_SIZE = "50mb"
-MAIN_DB_MAX_SIZE = "300mb"
+MAIN_DB_MAX_SIZE = "1000mb"
 #MAIN_DB = DB_DIR + "/brain.db"
 SCORE_THRESHOLD = 0  # downvote
-SUBREDDIT_THRESHOLD = 5000
-TOP_SUBREDDIT_NUM = 10  # number of subreddits to search for repost-able content
+TOP_SUBREDDIT_NUM = 30  # number of subreddits to search for repost-able content
 MIN_SCORE = 0  # for posts to repost
-SUBMISSION_SEARCH_TEMPLATE = f"https://api.pushshift.io/reddit/search/submission/?after={{after}}&before={{before}}&sort_type=score&sort=desc&subreddit={{subreddit}}&score=>{SUBREDDIT_THRESHOLD}"
+SUBMISSION_SEARCH_TEMPLATE = "https://api.pushshift.io/reddit/search/submission/?after={after}&before={before}&sort_type=score&sort=desc&subreddit={subreddit}"
 DAY = 86400  # POSIX day (exact value)
 MINUTE = 60
 PROBABILITIES = {
-  "REPLY": 0.002,
-  "SUBMISSION": 0.005,
+  "REPLY": 0.003,
+  "SUBMISSION": 0.002,
   "SHADOWCHECK": 0.002,
   "DBCHECK": 0.005,
   "KARMACHECK" : 0.005,
-  "LEARN": 0.02,
+  "LEARN": 0.002,
   "DELETE": 0.02 }
 MAX_CACHE_SIZE = 128
 NUMBER_DAYS_FOR_POST_TO_BE_OLD = 365
@@ -49,22 +49,26 @@ LOG_LEARNED_COMMENTS = False
 SHOW_SLEEP_LOGGING = False
 
 #Text Spinning options
-DO_WE_SPIN = False
-SPINNER_API = 'spinrewriter' # requires spinwriter subscription
+# DO_WE_SPIN = True
+SPINNER_API = 'spinrewriter' # 'free'
 
-DO_WE_SPIN_TITLES = False
-DO_WE_SPIN_COMMENTS = False
+DO_WE_SPIN_TITLES = True
+DO_WE_SPIN_COMMENTS = True
 
-SPINREWRITER_EMAIL_ADDRESS = ""
-SPINREWRITER_API_KEY = ""
+
+SPINREWRITER_EMAIL_ADDRESS = "angelamoranactu@gmail.com"
+SPINREWRITER_API_KEY = "e13e081#70500ed_1cc714b?71b323d"
 
 #IMGUR UPLOAD OPTIONS
-DO_WE_REUPLOAD_TO_IMGUR = False
-imgur_client_id = ""
-imgur_client_secret = ""
+DO_WE_REUPLOAD_TO_IMGUR = True
+IMGUR_CLIENT_ID = 'f3b8a6ef4700042'
+IMGUR_CLIENT_SECRET = 'd9e9be0448d6c77a214407f029fc23922afab27a'
+# imgur_client_id = ""
+# imgur_client_secret = ""
 
-DO_WE_ADD_PARAMS_REUPLOAD = False
+DO_WE_ADD_PARAMS_REUPLOAD = True
 
+KARMA_TO_STOP_AT = 1000
 
 # array of tuples with time windows.
 # bot will run if current utc time in between listed values
@@ -387,6 +391,25 @@ def rewrite_text(SPINNER_API, text):
             if 'API quota exceeded' in r.text:
                 log.info("API quota exceeded. We are not spinning.")
                 return text
+            if 'every 7 seconds' in r.text.lower()
+                log.info("Must wait 7 seconds before using spinrewriter API. Sleeping")
+                time.sleep(7)
+                data = {
+                    "email_address": SPINREWRITER_EMAIL_ADDRESS,
+                    "api_key": SPINREWRITER_API_KEY,
+                    "text": text,
+                    "action": "unique_variation"
+                }
+                r = requests.post("https://www.spinrewriter.com/action/api", data=data)
+                    if r.status_code == 200:
+                        if 'API quota exceeded' in r.text:
+                            log.info("API Quota Exceeded. We are not spinning")
+                        json_data = json.loads(r.text)
+                        if json_data['response']:
+                            return json_data['response']
+                        else:
+                            return text
+
             else:
                 json_data = json.loads(r.text)
                 if json_data['response']:
@@ -398,17 +421,28 @@ def rewrite_text(SPINNER_API, text):
         return text
 
 
-### NOT USED.. YET?
+## CHeck that url is an image, not gif or article.
+def is_url_image(image_url):
+   image_formats = ("image/png", "image/jpeg", "image/jpg")
+   r = requests.head(image_url)
+   if r.headers["content-type"] in image_formats:
+      return True
+   return False
+
+## Reupload images. Check if valid image using is_url_image() if so, use IMGUR_CLIENT_ID & IMGUR_CLIENT_SECRET to reupload.
 def reupload_image_to_imgur(url):
     try:
-        if 'jpg' in url:
+        if is_url_image(url):
+
             client = ImgurClient(IMGUR_CLIENT_ID, IMGUR_CLIENT_SECRET)
             # print(client.credits)
-            time.sleep(3) # Be nice to Imgur, we're a bot in no rush.
-            print("Uploading image")
+            time.sleep(1) # Be nice to Imgur, we're a bot in no rush.
+            log.info(f"Uploading image {url}")
             item = client.upload_from_url(url)
+            log.info(f"Successfully uploaded.. {url}")
             return item['link']
         else:
+            log.info("reupload_to_imgur(): Not an image - we are not reuploading")
             return url
     except Exception as e:
         print(f"error in reupload_image_to_imgur() : {e}")
@@ -421,9 +455,23 @@ def random_char(y): ## Needed for generating random characters for appending to 
 
 def append_params_to_url(DO_WE_ADD_PARAMS_REUPLOAD, url): ## Used for appending random strings as query parameters to URLS in the reposting module. This gives a unique variation of the URL.
     if DO_WE_ADD_PARAMS_REUPLOAD:
-        params = {random_char(5):random_char(5)}
-        req = PreparedRequest()
-        req.prepare_url(url, params)
-        return req.url
+        if 'v.redd' in url.lower():
+            log.info("v.reddit spotted in repost - we are not adding parameters here.")
+            return url
+        if 'i.redd' in url.lower():
+            log.info("i.reddit spotted in repost - we are not adding parameters here.")
+            return url
+
+        else:
+            params = {random_char(5):random_char(5)}
+            req = PreparedRequest()
+            req.prepare_url(url, params)
+            return req.url
     else:
         return url
+
+def check_if_karma_limit_hit(KARMA_TO_STOP_AT):
+    if (redditor.comment_karma < KARMA_TO_STOP_AT) or redditor.comment_karma < KARMA_TO_STOP_AT:
+        return True
+    else:
+        return False
