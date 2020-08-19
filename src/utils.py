@@ -33,7 +33,7 @@ DAY = 86400  # POSIX day (exact value)
 MINUTE = 60
 PROBABILITIES = {
   "REPLY": 0.002,
-  "SUBMISSION": 0.005,
+  "SUBMISSION": 0.002,
   "SHADOWCHECK": 0.002,
   "DBCHECK": 0.005,
   "KARMACHECK" : 0.005,
@@ -49,21 +49,21 @@ LOG_LEARNED_COMMENTS = False
 SHOW_SLEEP_LOGGING = False
 
 #Text Spinning options
-DO_WE_SPIN = False
-SPINNER_API = 'spinrewriter' # requires spinwriter subscription
+DO_WE_SPIN = True
+SPINNER_API = 'spinrewriter' # 'free'
 
-DO_WE_SPIN_TITLES = False
-DO_WE_SPIN_COMMENTS = False
+DO_WE_SPIN_TITLES = True
+DO_WE_SPIN_COMMENTS = True
 
-SPINREWRITER_EMAIL_ADDRESS = ""
-SPINREWRITER_API_KEY = ""
+SPINREWRITER_EMAIL_ADDRESS = "angelamoranactu@gmail.com"
+SPINREWRITER_API_KEY = "13f46e0#634a3e0_82c9fa8?a76d90c"
 
 #IMGUR UPLOAD OPTIONS
-DO_WE_REUPLOAD_TO_IMGUR = False
-imgur_client_id = ""
-imgur_client_secret = ""
+DO_WE_REUPLOAD_TO_IMGUR = True
+imgur_client_id = "71e21155e138956"
+imgur_client_secret = "035f88e44d57a25c37ddd953f5f1cb50c66d546e"
 
-DO_WE_ADD_PARAMS_REUPLOAD = False
+DO_WE_ADD_PARAMS_REUPLOAD = True
 
 
 # array of tuples with time windows.
